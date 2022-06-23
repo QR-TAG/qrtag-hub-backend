@@ -18,7 +18,6 @@ io.on('connection', socket => {
 
     socket.on('announceGun', (data: { id: string }) => {
         socket.data.guns.push(data.id);
-        console.log(socket.data.guns);
     });
 
     socket.on('addUser', (data: { gunId: string, username: string }) => {
@@ -44,12 +43,12 @@ io.on('connection', socket => {
         if (user) {
             user.life--;
         }
+
+        console.log(socket.data.users.reduce((acc: any, curr: any) => acc + (curr.life > 0 ? 1 : 0), 0));
+        if (socket.data.users.reduce((acc: any, curr: any) => acc + (curr.life > 0 ? 1 : 0), 0) <= 1) {
+            socket.emit('gameFinished');
+        }
     });
-
-    socket.on('startGame', () => {
-
-    });
-
 });
 
 httpServer.listen(3000);
