@@ -1,5 +1,6 @@
 import { createServer } from "http";
-import { Server } from 'socket.io'; 
+import { Server } from 'socket.io';
+import { State } from "./state";
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
@@ -8,49 +9,53 @@ const io = new Server(httpServer, {
     }
 });
 
-let guns: any[] = [];
-let users: any[] = [];
+const state = new State();
 
 io.on('connection', socket => {
-   
-
-    socket.on('startSetup', () => {
-        socket.emit('setupStarted', guns);
-        console.log(guns);
-    });
+    socket.join('qrtag');
 
     socket.on('announceGun', (data: { id: string }) => {
-        guns.push(data.id);
-        console.log(data);
+        state.addTagger(data.id);
+        socket.broadcast.emit('gunAnnounced', data);
     });
+
+    socket.on('startSetup', () => {
+        state.startSetup();
+        socket.broadcast.emit('setupStarted');
+    });
+
 
     socket.on('addUser', (data: { gunId: string, username: string }) => {
-        users.push({
-            gunId: data.gunId,
+        state.addUser({
             username: data.username,
-            tshirtId: null,
-            life: 5
+            taggerId: data.gunId
         });
+        socket.broadcast.emit('userAdded', data);
     });
 
-    socket.on('announceTshirt', (data: { gunId: string, tshirtId: string }) => {
-        users = users.map((user: any) => {
-            if (user.gunId === data.gunId) {
-                user.tshirtId = data.tshirtId;
+    socket.on('bindTshirt', (data: { gunId: string, tshirtId: string }) => {
+        state.bindTshirt(data.gunId, data.tshirtId);
+        socket.broadcast.emit('tshirtBound', data);
+    });
+
+    socket.on('tag', (data: { whoDidIt: string, tshirtId: string }) => {
+        const taggedUser = state.tag(data.tshirtId);
+
+        if (taggedUser) {
+            socket.broadcast.emit('userTagged', {
+                whoDidIt: data.whoDidIt,
+                username: taggedUser.username
+            });
+
+            if (taggedUser.life === 0) {
+                socket.broadcast.emit('userDied', {
+                    username: taggedUser.username
+                });
             }
-            return user;
-        });
-    });
-
-    socket.on('tshirtShot', (data: { shooterGunId: string, tshirtId: string }) => {
-        const user = users.find((user: any) => user.tshirtId === data.tshirtId);
-        if (user) {
-            user.life--;
         }
 
-        console.log(users.reduce((acc: any, curr: any) => acc + (curr.life > 0 ? 1 : 0), 0));
-        if (users.reduce((acc: any, curr: any) => acc + (curr.life > 0 ? 1 : 0), 0) <= 1) {
-            socket.emit('gameFinished');
+        if (state.getAliveUsersCount() <= 1) {
+            socket.broadcast.emit('gameFinished');
         }
     });
 });
