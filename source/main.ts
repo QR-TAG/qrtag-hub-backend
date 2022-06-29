@@ -1,5 +1,5 @@
 import { createServer } from "http";
-import { Server } from 'socket.io';
+import { Server } from 'socket.io'; 
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
@@ -8,20 +8,24 @@ const io = new Server(httpServer, {
     }
 });
 
+let guns: any[] = [];
+let users: any[] = [];
+
 io.on('connection', socket => {
-    socket.data.guns = [];
-    socket.data.users = [];
+   
 
     socket.on('startSetup', () => {
-        socket.emit('setupStarted', socket.data.guns);
+        socket.emit('setupStarted', guns);
+        console.log(guns);
     });
 
     socket.on('announceGun', (data: { id: string }) => {
-        socket.data.guns.push(data.id);
+        guns.push(data.id);
+        console.log(data);
     });
 
     socket.on('addUser', (data: { gunId: string, username: string }) => {
-        socket.data.users.push({
+        users.push({
             gunId: data.gunId,
             username: data.username,
             tshirtId: null,
@@ -30,7 +34,7 @@ io.on('connection', socket => {
     });
 
     socket.on('announceTshirt', (data: { gunId: string, tshirtId: string }) => {
-        socket.data.users = socket.data.users.map((user: any) => {
+        users = users.map((user: any) => {
             if (user.gunId === data.gunId) {
                 user.tshirtId = data.tshirtId;
             }
@@ -39,13 +43,13 @@ io.on('connection', socket => {
     });
 
     socket.on('tshirtShot', (data: { shooterGunId: string, tshirtId: string }) => {
-        const user = socket.data.users.find((user: any) => user.tshirtId === data.tshirtId);
+        const user = users.find((user: any) => user.tshirtId === data.tshirtId);
         if (user) {
             user.life--;
         }
 
-        console.log(socket.data.users.reduce((acc: any, curr: any) => acc + (curr.life > 0 ? 1 : 0), 0));
-        if (socket.data.users.reduce((acc: any, curr: any) => acc + (curr.life > 0 ? 1 : 0), 0) <= 1) {
+        console.log(users.reduce((acc: any, curr: any) => acc + (curr.life > 0 ? 1 : 0), 0));
+        if (users.reduce((acc: any, curr: any) => acc + (curr.life > 0 ? 1 : 0), 0) <= 1) {
             socket.emit('gameFinished');
         }
     });
