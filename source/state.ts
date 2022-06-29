@@ -1,3 +1,8 @@
+export interface Tagger {
+    taggerId: string;
+    socketId: string;
+}
+
 export interface User {
     username: string;
     taggerId: string;
@@ -15,15 +20,15 @@ export class State {
 
     private static MAX_LIFE = 5;
 
-    private _taggers: Set<string> = new Set();
+    private _taggers: Tagger[] = [];
     private _users: User[] = [];
     private _mode: Mode = Mode.init;
 
 
-    public get taggers(): Set<string> {
+    public get taggers(): Tagger[] {
         return this._taggers;
     }
-    public set taggers(taggers: Set<string>) {
+    public set taggers(taggers: Tagger[]) {
         this._taggers = taggers;
     }
 
@@ -60,17 +65,20 @@ export class State {
         }
 
         this._mode = Mode.init;
-        this.taggers.clear();
+        this.taggers = [];
         this.users = [];
     }
 
 
 
-    public addTagger(taggerId: string): void {
-        this.taggers.add(taggerId);
+    public addTagger(taggerId: string, socketId: string): void {
+        this.taggers.push({
+            taggerId,
+            socketId
+        });
     }
     public removeTagger(taggerId: string): void {
-        this.taggers.delete(taggerId);
+        this.taggers = this.taggers.filter((tagger: Tagger) => tagger.taggerId !== taggerId);
         this.users = this.users.filter((user: User) => user.taggerId !== taggerId);
     }
 
@@ -78,6 +86,10 @@ export class State {
     public addUser(user: Pick<User, 'username' | 'taggerId'>): void {
         if (this.mode !== Mode.setup_mode) {
             throw new Error('Wrong state');
+        }
+
+        if (!this.taggers.find((tagger: Tagger) => tagger.taggerId === user.taggerId)) { 
+            throw new Error('Tagger not found');
         }
 
         this.users.push({
@@ -88,20 +100,30 @@ export class State {
     }
 
 
-    public bindTshirt(username: string, tshirtId: string): void {
+    public bindTshirt(username: string, tshirtId: string): User {
         if (this.mode !== Mode.setup_mode) {
             throw new Error('Wrong state');
         }
+
+        let result: User | null = null;
 
         this.users = this.users.map((user: User) => {
             if (user.username === username) {
                 user.tshirtId = tshirtId;
             }
+
+            result =  user;
             return user;
         });
+
+        if (result === null) {
+            throw new Error('User not found');
+        }
+
+        return result;
     }
 
-    public tag(tshirtId: string): User | null {
+    public tag(tshirtId: string): User {
         if (this.mode !== Mode.game_mode) {
             throw new Error('Wrong state');
         }
@@ -116,6 +138,10 @@ export class State {
             taggedUser = user;
             return user;
         });
+
+        if (taggedUser === null) {
+            throw new Error('User not found');
+        }
 
         return taggedUser;
     }

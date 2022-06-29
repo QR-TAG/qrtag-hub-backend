@@ -1,4 +1,5 @@
 import { createServer } from "http";
+import { stringify } from "querystring";
 import { Server } from 'socket.io';
 import { State } from "./state";
 
@@ -15,7 +16,7 @@ io.on('connection', socket => {
     socket.join('qrtag');
 
     socket.on('announceGun', (data: { id: string }) => {
-        state.addTagger(data.id);
+        state.addTagger(data.id, socket.id);
         socket.broadcast.emit('gunAnnounced', data);
     });
 
@@ -34,24 +35,22 @@ io.on('connection', socket => {
     });
 
     socket.on('bindTshirt', (data: { gunId: string, tshirtId: string }) => {
-        state.bindTshirt(data.gunId, data.tshirtId);
-        socket.broadcast.emit('tshirtBound', data);
+        const user = state.bindTshirt(data.gunId, data.tshirtId);
+        socket.broadcast.emit('tshirtBound', { username: user.username, tshirtId: data.tshirtId });
     });
 
     socket.on('tag', (data: { whoDidIt: string, tshirtId: string }) => {
         const taggedUser = state.tag(data.tshirtId);
 
-        if (taggedUser) {
-            socket.broadcast.emit('userTagged', {
-                whoDidIt: data.whoDidIt,
+        socket.broadcast.emit('userTagged', {
+            whoDidIt: data.whoDidIt,
+            username: taggedUser.username
+        });
+
+        if (taggedUser.life === 0) {
+            socket.broadcast.emit('userDied', {
                 username: taggedUser.username
             });
-
-            if (taggedUser.life === 0) {
-                socket.broadcast.emit('userDied', {
-                    username: taggedUser.username
-                });
-            }
         }
 
         if (state.getAliveUsersCount() <= 1) {
