@@ -17,56 +17,79 @@ const state = new State();
 io.on('connection', socket => {
     logger.info('new connection', socket.id);
 
-    socket.on('announceGun', (data: { id: string }) => {
-        logger.debug('announceGun', data);
+    io.sockets.emit('state', state.getState());
+
+    socket.on('announceTagger', (data: { id: string }) => {
+        logger.debug('announceTagger', data);
 
         state.addTagger(data.id, socket.id);
-        socket.broadcast.emit('gunAnnounced', data);
+        io.sockets.emit('taggerAnnounced', data);
     });
 
     socket.on('startSetup', () => {
         logger.debug('startSetup');
 
         state.startSetup();
-        socket.broadcast.emit('setupStarted');
+        io.sockets.emit('setupStarted');
     });
 
-
-    socket.on('addUser', (data: { gunId: string, username: string }) => {
+    socket.on('addUser', (data: { taggerId: string, username: string }) => {
         logger.debug('addUser', data);
 
-        state.addUser({
+        const user = state.addUser({
             username: data.username,
-            taggerId: data.gunId
+            taggerId: data.taggerId
         });
-        socket.broadcast.emit('userAdded', data);
+
+        io.sockets.emit('userAdded', user);
     });
 
-    socket.on('bindTshirt', (data: { gunId: string, tshirtId: string }) => {
+    socket.on('bindTshirt', (data: { taggerId: string, tshirtId: string }) => {
         logger.debug('bindTshirt', data);
 
-        const user = state.bindTshirt(data.gunId, data.tshirtId);
-        socket.broadcast.emit('tshirtBound', { username: user.username, tshirtId: data.tshirtId });
+        const user = state.bindTshirt(data.taggerId, data.tshirtId);
+        logger.debug('user', user);
+        io.sockets.emit('tshirtBound', { username: user.username, tshirtId: data.tshirtId });
+    });
+
+    socket.on('startGame', () => {
+        logger.debug('startGame');
+
+        state.startGame();
+        io.sockets.emit('gameStarted');
     });
 
     socket.on('tag', (data: { whoDidIt: string, tshirtId: string }) => {
         logger.debug('tag', data);
-        
+
         const taggedUser = state.tag(data.tshirtId);
 
-        socket.broadcast.emit('userTagged', {
+        io.sockets.emit('userTagged', {
             whoDidIt: data.whoDidIt,
             username: taggedUser.username
         });
 
         if (taggedUser.life === 0) {
-            socket.broadcast.emit('userDied', {
+            io.sockets.emit('userDied', {
                 username: taggedUser.username
             });
         }
 
         if (state.getAliveUsersCount() <= 1) {
-            socket.broadcast.emit('gameFinished');
+            io.sockets.emit('gameFinished');
+            logger.debug('game finished');
+        }
+    });
+
+    socket.on('disconnect', () => {
+        logger.info('disconnect', socket.id);
+
+        const taggerId = state.removeTaggerFromSocketId(socket.id);
+
+        if (taggerId) {
+            io.sockets.emit('taggerDisconnected', {
+                taggerId
+            });
         }
     });
 });

@@ -16,6 +16,12 @@ export enum Mode {
     game_mode
 }
 
+export interface Data {
+    mode: Mode;
+    taggers: Tagger[];
+    users: User[];
+}
+
 export class State {
 
     private static MAX_LIFE = 5;
@@ -69,8 +75,6 @@ export class State {
         this.users = [];
     }
 
-
-
     public addTagger(taggerId: string, socketId: string): void {
         this.taggers.push({
             taggerId,
@@ -81,22 +85,33 @@ export class State {
         this.taggers = this.taggers.filter((tagger: Tagger) => tagger.taggerId !== taggerId);
         this.users = this.users.filter((user: User) => user.taggerId !== taggerId);
     }
+    public removeTaggerFromSocketId(socketId: string): string | null {
+        const tagger = this.taggers.find((tagger: Tagger) => tagger.socketId === socketId);
+        if (tagger) {
+            this.removeTagger(tagger.taggerId);
+        }
+        return tagger?.taggerId ?? null;
+    }
 
 
-    public addUser(user: Pick<User, 'username' | 'taggerId'>): void {
+    public addUser(data: Pick<User, 'username' | 'taggerId'>): User {
         if (this.mode !== Mode.setup_mode) {
             throw new Error('Wrong state');
         }
 
-        if (!this.taggers.find((tagger: Tagger) => tagger.taggerId === user.taggerId)) { 
+        if (!this.taggers.find((tagger: Tagger) => tagger.taggerId === data.taggerId)) {
             throw new Error('Tagger not found');
         }
 
-        this.users.push({
-            ...user,
+        const user: User = {
+            ...data,
             tshirtId: null,
             life: State.MAX_LIFE
-        });
+        };
+
+        this.users.push(user);
+
+        return user;
     }
 
 
@@ -112,7 +127,7 @@ export class State {
                 user.tshirtId = tshirtId;
             }
 
-            result =  user;
+            result = user;
             return user;
         });
 
@@ -131,7 +146,7 @@ export class State {
         let taggedUser: User | null = null;
 
         this.users = this.users.map((user: User) => {
-            if (user.tshirtId === tshirtId) {
+            if (user.tshirtId === tshirtId && user.life > 0) {
                 user.life--;
             }
 
@@ -148,6 +163,14 @@ export class State {
 
     public getAliveUsersCount(): number {
         return this.users.reduce((acc: number, curr: User) => acc + (curr.life > 0 ? 1 : 0), 0);
+    }
+
+    public getState(): Data {
+        return {
+            taggers: this.taggers,
+            users: this.users,
+            mode: this.mode
+        };
     }
 
 }
